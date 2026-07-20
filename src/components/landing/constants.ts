@@ -8,7 +8,7 @@ export function stagger(delay: number) {
  * — both surfaces import from here so they can never drift.
  */
 export const AGENT_SETUP_PROMPT =
-	"Fetch https://developers.cloudflare.com/agent-setup/prompt.md";
+	"Fetch https://docs.1cifer.kz/agent-setup/prompt.md";
 
 /**
  * Agents featured in the AgentSetup section grid and (a subset/all of) the

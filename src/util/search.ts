@@ -1,28 +1,24 @@
 export const openGlobalSearch = (searchTerm?: string) => {
-	// Try multiple selectors for DocSearch
-	const docSearchButton =
-		(document.querySelector("#docsearch button") as HTMLButtonElement) ||
-		(document.querySelector(".DocSearch-Button") as HTMLButtonElement) ||
-		(document.querySelector("[data-docsearch-button]") as HTMLButtonElement);
+	// Starlight's built-in <site-search> component exposes a stable
+	// `[data-open-modal]` trigger button regardless of which search provider
+	// (Pagefind by default) backs it.
+	const searchButton = document.querySelector(
+		"site-search button[data-open-modal]",
+	) as HTMLButtonElement | null;
 
-	if (docSearchButton) {
-		// Click the DocSearch button to open the modal
-		docSearchButton.click();
+	if (searchButton) {
+		searchButton.click();
 
 		if (searchTerm) {
-			// Wait for modal to open and set the search term
+			// Wait for the dialog (and Pagefind's UI) to mount, then set the term.
 			setTimeout(() => {
-				const searchInput =
-					(document.querySelector(".DocSearch-Input") as HTMLInputElement) ||
-					(document.querySelector("#docsearch-input") as HTMLInputElement) ||
-					(document.querySelector(
-						"[data-docsearch-input]",
-					) as HTMLInputElement);
+				const searchInput = document.querySelector(
+					"site-search input[type=text]",
+				) as HTMLInputElement | null;
 
 				if (searchInput) {
 					searchInput.value = searchTerm;
 					searchInput.focus();
-					// Trigger search
 					searchInput.dispatchEvent(new Event("input", { bubbles: true }));
 				}
 			}, 100);

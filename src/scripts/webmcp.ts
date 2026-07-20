@@ -1,10 +1,9 @@
 /**
- * WebMCP — exposes Cloudflare Docs site tools to AI agents via the browser.
+ * WebMCP — exposes docs site tools to AI agents via the browser.
  * Spec: https://webmachinelearning.github.io/webmcp/
  */
 
-import { ALGOLIA_APP_ID, ALGOLIA_API_KEY, ALGOLIA_INDEX } from "~/util/algolia";
-const LLMS_TXT_URL = "https://developers.cloudflare.com/llms.txt";
+const LLMS_TXT_URL = "/llms.txt";
 
 // Cache for list-directories results — fetched once per session.
 let directoriesCache: DirectoryEntry[] | null = null;
@@ -16,26 +15,16 @@ interface DirectoryEntry {
 	group: string;
 }
 
-interface AlgoliaHit {
-	objectID: string;
-	url?: string;
-	hierarchy?: {
-		lvl0?: string;
-		lvl1?: string;
-		lvl2?: string;
-	};
-	content?: string;
-	_snippetResult?: {
-		content?: { value?: string };
-		hierarchy?: {
-			lvl1?: { value?: string };
-			lvl2?: { value?: string };
-		};
-	};
+interface PagefindResult {
+	data: () => Promise<{
+		url: string;
+		meta?: { title?: string };
+		excerpt?: string;
+	}>;
 }
 
-interface AlgoliaResponse {
-	hits: AlgoliaHit[];
+interface PagefindAPI {
+	search: (query: string) => Promise<{ results: PagefindResult[] }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -46,44 +35,23 @@ async function executeSearch(input: object): Promise<unknown> {
 
 	const clampedLimit = Math.min(Math.max(1, limit), 20);
 
-	const response = await fetch(
-		`https://${ALGOLIA_APP_ID}-dsn.algolia.net/1/indexes/${ALGOLIA_INDEX}/query`,
-		{
-			method: "POST",
-			headers: {
-				"X-Algolia-Application-Id": ALGOLIA_APP_ID,
-				"X-Algolia-API-Key": ALGOLIA_API_KEY,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				query,
-				filters: "type:content",
-				hitsPerPage: clampedLimit,
-				attributesToRetrieve: ["url", "hierarchy", "content"],
-				attributesToSnippet: ["content:20", "hierarchy.lvl1:10"],
-			}),
-		},
+	// Pagefind's client bundle is generated at build time into /pagefind/ and
+	// isn't a package dependency, so it's loaded at runtime rather than
+	// imported statically.
+	const pagefind = (await import(
+		/* @vite-ignore */ `${window.location.origin}/pagefind/pagefind.js`
+	)) as PagefindAPI;
+
+	const { results } = await pagefind.search(query);
+
+	const hits = await Promise.all(
+		results.slice(0, clampedLimit).map((result) => result.data()),
 	);
 
-	if (!response.ok) {
-		throw new Error(`Search failed: ${response.status} ${response.statusText}`);
-	}
-
-	const data = (await response.json()) as AlgoliaResponse;
-
-	return data.hits.map((hit) => ({
-		title:
-			hit.hierarchy?.lvl2 ??
-			hit.hierarchy?.lvl1 ??
-			hit.hierarchy?.lvl0 ??
-			"Untitled",
+	return hits.map((hit) => ({
+		title: hit.meta?.title ?? "Untitled",
 		url: hit.url ?? "",
-		snippet:
-			hit._snippetResult?.content?.value ??
-			hit._snippetResult?.hierarchy?.lvl1?.value ??
-			hit._snippetResult?.hierarchy?.lvl2?.value ??
-			hit.content?.slice(0, 200) ??
-			"",
+		snippet: hit.excerpt ?? "",
 	}));
 }
 
@@ -147,9 +115,9 @@ function registerTools(): void {
 	navigator.modelContext.registerTool(
 		{
 			name: "search",
-			title: "Search Cloudflare Docs",
+			title: "Search the documentation",
 			description:
-				"Full-text search across Cloudflare developer documentation. Returns matching pages with titles, URLs, and content snippets. Use this to find documentation on any Cloudflare product or feature.",
+				"Full-text search across the documentation. Returns matching pages with titles, URLs, and content snippets. Use this to find documentation on any product or feature.",
 			inputSchema: {
 				type: "object",
 				properties: {
@@ -177,9 +145,9 @@ function registerTools(): void {
 	navigator.modelContext.registerTool(
 		{
 			name: "list-directories",
-			title: "List Cloudflare Docs Products",
+			title: "List documentation products",
 			description:
-				"Returns a list of all Cloudflare products available in the developer documentation, including each product's name, docs URL, short description, and category group. Use this to discover what products exist before searching or navigating.",
+				"Returns a list of all products available in the documentation, including each product's name, docs URL, short description, and category group. Use this to discover what products exist before searching or navigating.",
 			inputSchema: {
 				type: "object",
 				properties: {},
