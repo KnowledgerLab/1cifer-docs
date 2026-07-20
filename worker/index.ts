@@ -8,6 +8,8 @@ const redirectsEvaluator = generateRedirectsEvaluator(redirectsFileContents, {
 	maxDynamicRules: 2_000, // Usually 100
 });
 
+const LLMS_FULL_R2_PREFIX = "v1/cloudflare-docs-llms-full";
+
 // RFC 9727 requires the path to be exactly /.well-known/api-catalog with no
 // extension. The Cloudflare ASSETS binding cannot serve extensionless files
 // from dot-prefixed directories, so this must be handled directly in the worker.
@@ -85,13 +87,51 @@ export default class extends WorkerEntrypoint<Env> {
 			});
 		}
 
-		// /.well-known/mcp/server-card.json, /openapi.json, and per-section
-		// /llms-full.txt used to be served from the MIDDLECACHE R2 bucket,
-		// populated by Cloudflare's own external content pipeline (not part of
-		// this repo). They now fall through to ASSETS below: /llms.txt (the
-		// index) is still generated locally by Astro/Starlight and works, but
-		// /llms-full.txt was never generated locally — it 404s until a
-		// replacement source (local generation or a new R2 pipeline) exists.
+		if (pathname === "/.well-known/mcp/server-card.json") {
+			const object = await this.env.MIDDLECACHE.get(
+				"v1/cloudflare-mcps/server-card.json",
+			);
+			if (!object) {
+				return new Response("server-card.json not found", { status: 404 });
+			}
+			return new Response(object.body, {
+				headers: {
+					"Content-Type": "application/json; charset=utf-8",
+				},
+			});
+		}
+
+		if (pathname === "/openapi.json") {
+			const object = await this.env.MIDDLECACHE.get(
+				"v1/cloudflare-api-schemas/openapi.json",
+			);
+			if (!object) {
+				return new Response("openapi.json not found", { status: 404 });
+			}
+			return new Response(object.body, {
+				headers: {
+					"Content-Type": "application/json; charset=utf-8",
+				},
+			});
+		}
+
+		if (pathname.endsWith("/llms-full.txt")) {
+			// pathname is e.g. "/llms-full.txt" or "/workers/llms-full.txt"
+			// R2 key: "v1/cloudflare-docs-llms-full/llms-full.txt" or
+			//         "v1/cloudflare-docs-llms-full/workers/llms-full.txt"
+			const r2Key = `${LLMS_FULL_R2_PREFIX}${pathname}`;
+			const object = await this.env.MIDDLECACHE.get(r2Key);
+
+			if (!object) {
+				return new Response("llms-full.txt not found", { status: 404 });
+			}
+
+			return new Response(object.body, {
+				headers: {
+					"Content-Type": "text/markdown; charset=utf-8",
+				},
+			});
+		}
 
 		const isMarkdownRequest = url.pathname.endsWith("/index.md");
 
