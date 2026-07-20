@@ -132,11 +132,11 @@ export default defineConfig({
 	},
 	integrations: [
 		starlight({
-			title: "1cifer Docs",
+			title: "1Cifer Docs",
 			logo: {
-				src: "./src/assets/logo.svg",
+				src: "./src/assets/logo.png",
 			},
-			favicon: "/favicon.svg",
+			favicon: "/favicon.png",
 			components: {
 				Banner: "./src/components/overrides/Banner.astro",
 				Footer: "./src/components/overrides/Footer.astro",
